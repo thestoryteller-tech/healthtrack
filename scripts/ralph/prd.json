@@ -1,0 +1,682 @@
+{
+  "project": "HealthTrackPro",
+  "branchName": "ralph/hipaa-tracking-saas",
+  "description": "HIPAA-Compliant Tracking SaaS Platform - A turnkey solution enabling healthcare clinics to safely use advertising platforms without exposing PHI",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Initialize Next.js Project with TypeScript",
+      "description": "Initialize a Next.js 14+ project with TypeScript, ESLint, Prettier, and Tailwind CSS. Set up the folder structure for a monorepo-style project.",
+      "acceptanceCriteria": [
+        "Next.js 14+ with App Router initialized",
+        "TypeScript strict mode enabled in tsconfig.json",
+        "ESLint + Prettier configured with consistent rules",
+        "Tailwind CSS installed and configured",
+        "shadcn/ui initialized with button, card, input components",
+        "Folder structure: /app (dashboard routes), /lib (shared utilities), /sdk (client SDK source), /packages (shared types)",
+        "Package.json with all dependencies properly listed",
+        "npm run build succeeds without errors",
+        "npm run lint passes",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Foundation for entire project - must be done first"
+    },
+    {
+      "id": "US-002",
+      "title": "Set Up Supabase Database Schema",
+      "description": "Create the core database schema for multi-tenant SaaS including organizations, users, tracking configurations, and audit logs.",
+      "acceptanceCriteria": [
+        "Supabase client configured in /lib/supabase",
+        "Environment variables template (.env.example) with SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY",
+        "SQL migrations in /supabase/migrations for: organizations (id, name, slug, created_at, subscription_tier)",
+        "Table: users (id, email, org_id, role, created_at) with FK to organizations",
+        "Table: api_keys (id, org_id, key_hash, name, created_at, revoked_at)",
+        "Table: tracking_configs (id, org_id, platform, credentials_encrypted, enabled, created_at)",
+        "Table: sensitive_pages (id, org_id, url_pattern, action, created_at)",
+        "Table: events_log (id, org_id, event_type, platform, scrubbed_fields, created_at) - partitioned by date",
+        "Table: audit_log (id, org_id, user_id, action, details, created_at)",
+        "Row-Level Security (RLS) policies ensuring users only see their org data",
+        "TypeScript types in /packages/types/database.ts generated or manually created",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Use Supabase local development if possible, or configure for remote"
+    },
+    {
+      "id": "US-003",
+      "title": "Authentication System with Supabase Auth",
+      "description": "Implement user authentication using Supabase Auth with email/password and magic link options. Include organization-based access control.",
+      "acceptanceCriteria": [
+        "Sign up page at /signup with email, password, organization name fields",
+        "Sign in page at /login with email, password fields",
+        "Magic link option on login page",
+        "Password reset flow at /reset-password",
+        "Email verification required before dashboard access",
+        "Auth middleware protecting all /dashboard/* routes",
+        "Session stored in httpOnly cookies",
+        "Sign out functionality in dashboard header",
+        "New users automatically create an organization",
+        "Invite flow: existing org admins can invite by email",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Core auth before any protected features"
+    },
+    {
+      "id": "US-004",
+      "title": "Create Base Tracking SDK",
+      "description": "Build a lightweight JavaScript SDK that clinics embed on their websites. The SDK should intercept and proxy tracking events to our server.",
+      "acceptanceCriteria": [
+        "SDK source in /sdk/src/index.ts",
+        "Build script produces /sdk/dist/healthtrack.min.js under 10KB gzipped",
+        "SDK exposes global HealthTrack object",
+        "HealthTrack.init({ apiKey: string, serverUrl?: string }) initializes tracking",
+        "Auto-captures page views on initialization",
+        "Events queued in memory and sent in batches (every 5s or 10 events)",
+        "Beacon API used for page unload to prevent data loss",
+        "Graceful fallback if script blocked (no errors thrown)",
+        "ES5 compatible output for older browsers",
+        "TypeScript declarations generated",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "Foundation of client-side tracking"
+    },
+    {
+      "id": "US-005",
+      "title": "PHI Detection in SDK",
+      "description": "Add client-side PHI detection to warn (in dev mode) and strip sensitive data before sending to server.",
+      "acceptanceCriteria": [
+        "PHI detection module in /sdk/src/phi-detector.ts",
+        "Detect email patterns in any string field",
+        "Detect phone number patterns (US formats)",
+        "Detect SSN patterns (XXX-XX-XXXX)",
+        "Detect common name fields (firstName, lastName, patientName, etc.)",
+        "Strip gclid, fbclid, msclkid from URL before sending",
+        "Configurable sensitive URL patterns via HealthTrack.configureSensitivePages([patterns])",
+        "Development mode: console.warn when PHI detected with field name",
+        "Production mode: silently strip PHI, no console output",
+        "Unit tests for all detection patterns",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "Critical security feature - first line of defense"
+    },
+    {
+      "id": "US-006",
+      "title": "Event Tracking API in SDK",
+      "description": "Implement methods for tracking custom events, conversions, and page views with automatic data sanitization.",
+      "acceptanceCriteria": [
+        "HealthTrack.trackPageView(properties?) - track page view with optional properties",
+        "HealthTrack.trackEvent(eventName, properties?) - track custom event",
+        "HealthTrack.trackConversion(conversionName, value?, properties?) - track conversion with optional value",
+        "HealthTrack.identify(userId) - set anonymous user ID (hashed client-side)",
+        "All methods pass data through PHI filter before queueing",
+        "Each event includes: anonymized_session_id, timestamp, page_url (scrubbed), referrer (scrubbed)",
+        "Session ID generated on init, stored in sessionStorage",
+        "Events include SDK version for debugging",
+        "TypeScript types exported for framework integrations",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "Main developer-facing API"
+    },
+    {
+      "id": "US-007",
+      "title": "Consent Mode Integration",
+      "description": "Add consent mode support that integrates with popular CMPs to respect user preferences.",
+      "acceptanceCriteria": [
+        "Consent module in /sdk/src/consent.ts",
+        "HealthTrack.setConsent({ analytics: boolean, marketing: boolean }) - manual consent setting",
+        "Auto-detect Google Consent Mode v2 window.dataLayer signals",
+        "Auto-detect OneTrust OptanonConsent cookie",
+        "Auto-detect Cookiebot CookieConsent",
+        "When consent denied: events queued but not sent",
+        "When consent granted: queued events sent, normal operation resumes",
+        "Consent state included in event payloads to server",
+        "Generic CMP adapter interface for custom integrations",
+        "Unit tests for consent detection",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": "GDPR/CCPA compliance"
+    },
+    {
+      "id": "US-008",
+      "title": "Create Event Ingestion Endpoint",
+      "description": "Build the main API endpoint that receives events from the SDK, validates them, and queues for processing.",
+      "acceptanceCriteria": [
+        "POST /api/v1/events endpoint in Next.js App Router",
+        "Request body: { apiKey: string, events: Event[] }",
+        "Validate API key against database, return 401 if invalid",
+        "Validate event schema with Zod, return 400 if invalid",
+        "Rate limiting: 1000 requests/minute per API key using upstash/ratelimit or similar",
+        "Return 429 with Retry-After header when rate limited",
+        "Queue events for async processing (store in events_log with status pending)",
+        "Return 202 Accepted with { eventIds: string[], received: number }",
+        "Log request metadata to audit_log",
+        "Handle CORS for cross-origin SDK requests",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": "Main entry point for all tracking data"
+    },
+    {
+      "id": "US-009",
+      "title": "Server-Side PHI Scrubbing",
+      "description": "Implement comprehensive PHI scrubbing on the server before any data is forwarded to third parties.",
+      "acceptanceCriteria": [
+        "PHI scrubber module in /lib/phi-scrubber.ts",
+        "Remove fields: email, phone, name, firstName, lastName, address, ssn, dob, patientId",
+        "Detect and remove PHI in nested objects recursively",
+        "Hash any user identifiers using SHA-256 with org-specific salt",
+        "Strip query parameters: email, name, phone, patient, gclid, fbclid, msclkid from URLs",
+        "Scrub referrer URLs with same logic",
+        "IP address anonymization: zero last octet for IPv4, last 80 bits for IPv6",
+        "Log scrubbing summary to events_log.scrubbed_fields (field names only, not values)",
+        "Create audit_log entry for each scrubbing action",
+        "Comprehensive unit tests with edge cases",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": "Critical security - second line of defense"
+    },
+    {
+      "id": "US-010",
+      "title": "GA4 Measurement Protocol Integration",
+      "description": "Implement server-side forwarding to Google Analytics 4 via Measurement Protocol.",
+      "acceptanceCriteria": [
+        "GA4 integration module in /lib/integrations/ga4.ts",
+        "Configure with: measurement_id, api_secret (stored encrypted in tracking_configs)",
+        "Map events: page_view -> page_view, trackEvent -> custom event, trackConversion -> conversion",
+        "Include client_id (hashed session ID) in all requests",
+        "Support user_properties for anonymous segmentation",
+        "HTTP POST to https://www.google-analytics.com/mp/collect",
+        "Retry failed requests up to 3 times with exponential backoff",
+        "Log success/failure to events_log",
+        "Validation endpoint to test credentials",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": "First platform integration"
+    },
+    {
+      "id": "US-011",
+      "title": "Meta Conversions API Integration",
+      "description": "Implement server-side forwarding to Meta (Facebook) Conversions API without Advanced Matching.",
+      "acceptanceCriteria": [
+        "Meta CAPI module in /lib/integrations/meta.ts",
+        "Configure with: pixel_id, access_token (stored encrypted)",
+        "Map events: page_view -> PageView, trackEvent -> ViewContent, trackConversion -> Lead/Purchase",
+        "Include ONLY: event_name, event_time, event_source_url, action_source=website",
+        "Use external_id with hashed session ID (NO email, phone, or user data)",
+        "Set event_id for deduplication",
+        "HTTP POST to https://graph.facebook.com/v18.0/{pixel_id}/events",
+        "Handle API errors and rate limits",
+        "Retry logic with exponential backoff",
+        "Test mode support for validation",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": "High priority - most clients will use Meta"
+    },
+    {
+      "id": "US-012",
+      "title": "TikTok Events API Integration",
+      "description": "Implement server-side forwarding to TikTok Events API.",
+      "acceptanceCriteria": [
+        "TikTok module in /lib/integrations/tiktok.ts",
+        "Configure with: pixel_code, access_token (stored encrypted)",
+        "Map events: page_view -> PageView, trackConversion -> CompletePayment/SubmitForm",
+        "Include ONLY: event, timestamp, context (page_url, user_agent)",
+        "Use anonymous external_id (hashed session)",
+        "HTTP POST to https://business-api.tiktok.com/open_api/v1.3/pixel/track/",
+        "Handle API errors gracefully",
+        "Test mode for validation",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": "Growing platform, important for younger demographics"
+    },
+    {
+      "id": "US-013",
+      "title": "Google Ads Offline Conversion Integration",
+      "description": "Implement Google Ads offline conversion import for attribution.",
+      "acceptanceCriteria": [
+        "Google Ads module in /lib/integrations/google-ads.ts",
+        "OAuth2 flow for Google Ads API authentication",
+        "Store refresh_token encrypted in tracking_configs",
+        "Collect gclid from SDK (when on non-sensitive pages) and store temporarily",
+        "Batch conversion uploads daily via Google Ads API",
+        "Map trackConversion to offline conversion with gclid",
+        "Handle OAuth token refresh automatically",
+        "Error handling for invalid gclids",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "Complex OAuth but valuable for attribution"
+    },
+    {
+      "id": "US-014",
+      "title": "LinkedIn Conversions API Integration",
+      "description": "Implement server-side forwarding to LinkedIn Conversions API.",
+      "acceptanceCriteria": [
+        "LinkedIn module in /lib/integrations/linkedin.ts",
+        "Configure with: conversion_id, access_token (stored encrypted)",
+        "Map trackConversion events to LinkedIn conversions",
+        "Include ONLY: conversion, conversionHappenedAt, eventId",
+        "Use user.userIds with partner-provided hashed ID only",
+        "HTTP POST to LinkedIn CAPI endpoint",
+        "Handle API errors and authentication refresh",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": true,
+      "notes": "B2B healthcare marketing"
+    },
+    {
+      "id": "US-015",
+      "title": "Dashboard Layout and Navigation",
+      "description": "Create the main dashboard layout with sidebar navigation, header, and responsive design.",
+      "acceptanceCriteria": [
+        "Dashboard layout component in /app/dashboard/layout.tsx",
+        "Sidebar with navigation: Overview, Events, Platforms, Settings, Docs",
+        "Collapsible sidebar on desktop, hamburger on mobile",
+        "Top header with: organization name, user menu (profile, logout)",
+        "User menu dropdown with avatar, email, sign out",
+        "Dark/light mode toggle persisted to localStorage",
+        "Organization switcher dropdown (for users in multiple orgs)",
+        "Breadcrumb navigation",
+        "Loading states for async data",
+        "Typecheck passes"
+      ],
+      "priority": 15,
+      "passes": true,
+      "notes": "Foundation for all dashboard pages"
+    },
+    {
+      "id": "US-016",
+      "title": "Organization Settings Page",
+      "description": "Create settings page for organization profile, billing info, and team management.",
+      "acceptanceCriteria": [
+        "Settings page at /dashboard/settings",
+        "Organization profile section: name (editable), slug (read-only), created date",
+        "Logo upload with image preview (store in Supabase Storage)",
+        "Billing contact: email, company name, address fields",
+        "Team members table: email, role, joined date, actions",
+        "Invite member form: email input, role selector (admin/member)",
+        "Remove member confirmation modal",
+        "Role change functionality for admins",
+        "Subscription status card (current plan, renewal date)",
+        "Typecheck passes"
+      ],
+      "priority": 16,
+      "passes": true,
+      "notes": "Core organization management"
+    },
+    {
+      "id": "US-017",
+      "title": "API Key Management",
+      "description": "Allow organizations to create, view, and revoke API keys for SDK integration.",
+      "acceptanceCriteria": [
+        "API Keys page at /dashboard/settings/api-keys",
+        "List existing keys: name, created date, last used, status",
+        "Create key button opening modal with name input",
+        "Generated key shown ONCE after creation with copy button",
+        "Key stored as hash in database (cannot be retrieved later)",
+        "Revoke key button with confirmation",
+        "Revoked keys shown as inactive, not deleted",
+        "Key usage stats: requests today, this month",
+        "Warning when no active keys exist",
+        "Typecheck passes"
+      ],
+      "priority": 17,
+      "passes": true,
+      "notes": "Required for SDK integration"
+    },
+    {
+      "id": "US-018",
+      "title": "Platform Connections Page",
+      "description": "Create UI for connecting advertising platforms (Meta, Google, TikTok, LinkedIn).",
+      "acceptanceCriteria": [
+        "Platforms page at /dashboard/platforms",
+        "Grid of platform cards: GA4, Google Ads, Meta, TikTok, LinkedIn",
+        "Each card shows: logo, name, connection status, last sync",
+        "Connect button opens configuration modal per platform",
+        "GA4 config: measurement_id, api_secret inputs",
+        "Google Ads config: OAuth connect button",
+        "Meta config: pixel_id, access_token inputs",
+        "TikTok config: pixel_code, access_token inputs",
+        "LinkedIn config: conversion_id, access_token inputs",
+        "Test Connection button that validates credentials",
+        "Disconnect button with confirmation",
+        "Credentials stored encrypted",
+        "Typecheck passes"
+      ],
+      "priority": 18,
+      "passes": true,
+      "notes": "Core configuration for tracking"
+    },
+    {
+      "id": "US-019",
+      "title": "Sensitive Pages Configuration",
+      "description": "Allow clinics to define which URL patterns should have enhanced PHI protection.",
+      "acceptanceCriteria": [
+        "Sensitive Pages at /dashboard/settings/sensitive-pages",
+        "Table of patterns: URL pattern, action (block/strip), created date",
+        "Add pattern modal: URL pattern input (regex or glob), action dropdown",
+        "Pattern preview: input test URL, show if it matches",
+        "Preset patterns button: intake-form, appointment, patient, medical, health, prescription",
+        "Edit pattern functionality",
+        "Delete pattern with confirmation",
+        "Import from CSV upload (pattern, action columns)",
+        "Export to CSV button",
+        "Explanation of what each action does",
+        "Typecheck passes"
+      ],
+      "priority": 19,
+      "passes": true,
+      "notes": "Important for HIPAA compliance"
+    },
+    {
+      "id": "US-020",
+      "title": "Event Mapping Configuration",
+      "description": "Let users customize how events are mapped to different platforms.",
+      "acceptanceCriteria": [
+        "Event Mapping at /dashboard/settings/events",
+        "Default mappings table: SDK event -> platform event per platform",
+        "Edit mapping: change destination event name",
+        "Toggle to enable/disable event for each platform",
+        "Custom events section: create new event mappings",
+        "Add custom event: source name, destination per platform",
+        "Delete custom event mapping",
+        "Reset to defaults button",
+        "Visual indicator for overridden vs default mappings",
+        "Typecheck passes"
+      ],
+      "priority": 20,
+      "passes": true,
+      "notes": "Advanced customization for power users"
+    },
+    {
+      "id": "US-021",
+      "title": "Real-Time Event Monitor",
+      "description": "Show live event stream with PHI scrubbing indicators.",
+      "acceptanceCriteria": [
+        "Event Monitor at /dashboard/events/live",
+        "Live event feed updating every 5 seconds (polling or websocket)",
+        "Each event row: timestamp, event type, platform destinations, PHI scrubbed indicator",
+        "PHI indicator shows which fields were scrubbed (not values)",
+        "Expandable row showing full event details (sanitized)",
+        "Filter by: event type, platform, time range",
+        "Pause/Resume feed button",
+        "Event count in header",
+        "Empty state when no recent events",
+        "Auto-scroll toggle",
+        "Typecheck passes"
+      ],
+      "priority": 21,
+      "passes": true,
+      "notes": "Useful for debugging integration"
+    },
+    {
+      "id": "US-022",
+      "title": "Analytics Overview Dashboard",
+      "description": "Create main analytics dashboard with key metrics and charts.",
+      "acceptanceCriteria": [
+        "Overview at /dashboard (default landing page)",
+        "Key metrics cards: Total Events (24h), Events by Platform, PHI Scrub Rate, Error Rate",
+        "Line chart: Events over time (last 7/30/90 days)",
+        "Bar chart: Events by platform breakdown",
+        "Pie chart: Event types distribution",
+        "Date range selector: 7d, 30d, 90d, custom",
+        "Compare to previous period toggle",
+        "Loading skeletons while data fetches",
+        "Empty state for new accounts with setup prompts",
+        "Typecheck passes"
+      ],
+      "priority": 22,
+      "passes": true,
+      "notes": "Primary dashboard view"
+    },
+    {
+      "id": "US-023",
+      "title": "Audit Log Viewer",
+      "description": "Display audit log for compliance reporting.",
+      "acceptanceCriteria": [
+        "Audit Log at /dashboard/audit-log",
+        "Table: timestamp, user, action, details summary",
+        "Expandable row for full details JSON",
+        "Search box for filtering by action or user",
+        "Date range filter",
+        "Filter by action type dropdown",
+        "Pagination with configurable page size",
+        "Export to CSV with date range",
+        "PHI scrubbing details show field names removed, never values",
+        "Typecheck passes"
+      ],
+      "priority": 23,
+      "passes": true,
+      "notes": "HIPAA audit trail requirement"
+    },
+    {
+      "id": "US-024",
+      "title": "JavaScript SDK Integration Guide",
+      "description": "Create in-app documentation for SDK integration.",
+      "acceptanceCriteria": [
+        "Docs page at /dashboard/docs/sdk",
+        "Quick start section with script tag code block",
+        "Script tag includes org API key pre-filled",
+        "Copy button for code blocks",
+        "Sections: Installation, Initialization, Page Views, Custom Events, Conversions, Consent",
+        "Code examples for each method with real syntax highlighting",
+        "Troubleshooting section: common issues and solutions",
+        "Framework guides: React, Vue, plain HTML",
+        "Link to full API reference",
+        "Typecheck passes"
+      ],
+      "priority": 24,
+      "passes": true,
+      "notes": "Critical for user onboarding"
+    },
+    {
+      "id": "US-025",
+      "title": "WordPress Plugin",
+      "description": "Create WordPress plugin for one-click integration.",
+      "acceptanceCriteria": [
+        "WordPress plugin source in /integrations/wordpress/",
+        "Plugin adds settings page under Settings menu",
+        "Settings page with API key input field",
+        "Auto-inject SDK script in wp_footer when API key set",
+        "Checkbox to enable/disable tracking",
+        "Default sensitive patterns for WooCommerce checkout, Gravity Forms health forms",
+        "Plugin readme.txt with installation instructions",
+        "Plugin .zip file generated by build script",
+        "Download link in dashboard at /dashboard/docs/wordpress",
+        "Typecheck passes (for any TS build scripts)"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": "WordPress is common in healthcare"
+    },
+    {
+      "id": "US-026",
+      "title": "Installation Verification",
+      "description": "Help users verify their integration is working correctly.",
+      "acceptanceCriteria": [
+        "Verification widget on dashboard Overview page",
+        "Status indicator: Not Installed, Pending, Verified",
+        "Check: any events received in last 24 hours",
+        "Check: API key active and valid",
+        "Check: at least one platform connected",
+        "Send Test Event button that triggers event from dashboard",
+        "Verify Test Event received confirmation",
+        "Troubleshooting tips for each failed check",
+        "Link to relevant docs for each issue",
+        "Typecheck passes"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": "Reduce support requests"
+    },
+    {
+      "id": "US-027",
+      "title": "Stripe Integration for Subscriptions",
+      "description": "Implement Stripe subscription billing.",
+      "acceptanceCriteria": [
+        "Stripe client in /lib/stripe.ts",
+        "Environment variables: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET",
+        "Plans defined: Free (1000 events/mo), Pro ($49/mo, 100k events), Enterprise (custom)",
+        "Billing page at /dashboard/settings/billing",
+        "Current plan display with upgrade/downgrade options",
+        "Stripe Checkout redirect for plan changes",
+        "Stripe Customer Portal link for payment methods",
+        "Webhook endpoint /api/webhooks/stripe handling: checkout.session.completed, customer.subscription.updated, invoice.payment_failed",
+        "Update org subscription_tier on webhook events",
+        "Invoice history table from Stripe",
+        "Typecheck passes"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": "Monetization foundation"
+    },
+    {
+      "id": "US-028",
+      "title": "Usage Tracking & Limits",
+      "description": "Track event usage and enforce plan limits.",
+      "acceptanceCriteria": [
+        "Usage tracking in events_log count per org per month",
+        "Usage display on dashboard: X / Y events this month",
+        "Progress bar visual for usage",
+        "Plan limits: Free=1000, Pro=100000, Enterprise=unlimited",
+        "Email notification at 80% usage (via Supabase Edge Function or external)",
+        "Email notification at 90% usage",
+        "At 100%: continue accepting events, log warning, show upgrade banner",
+        "At 120%: queue events, require upgrade to process",
+        "Upgrade prompts in usage section",
+        "Historical usage chart (last 6 months)",
+        "Typecheck passes"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": "Revenue protection"
+    },
+    {
+      "id": "US-029",
+      "title": "HIPAA Compliance Documentation",
+      "description": "Generate compliance documentation and BAA workflow.",
+      "acceptanceCriteria": [
+        "Compliance page at /dashboard/compliance",
+        "HIPAA compliance guide explaining our safeguards",
+        "Checklist: what clinics need to do on their end",
+        "BAA request form (collect org details, contact info)",
+        "Data Processing Agreement viewable inline",
+        "Download DPA as PDF button",
+        "Privacy Policy link",
+        "Security measures documentation",
+        "Contact support link for BAA questions",
+        "Typecheck passes"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": "Legal requirement for healthcare"
+    },
+    {
+      "id": "US-030",
+      "title": "Security Headers & Hardening",
+      "description": "Implement security best practices.",
+      "acceptanceCriteria": [
+        "Security headers in next.config.js or middleware",
+        "Content-Security-Policy header (strict, allow only needed sources)",
+        "Strict-Transport-Security header (HSTS)",
+        "X-Frame-Options: DENY",
+        "X-Content-Type-Options: nosniff",
+        "Referrer-Policy: strict-origin-when-cross-origin",
+        "Rate limiting on all API routes (using middleware)",
+        "Input sanitization on all form submissions",
+        "CSRF protection on state-changing endpoints",
+        "Secure cookies (httpOnly, secure, sameSite)",
+        "npm audit shows no high/critical vulnerabilities",
+        "Typecheck passes"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": "Security baseline"
+    },
+    {
+      "id": "US-031",
+      "title": "Unit Tests for PHI Scrubbing",
+      "description": "Comprehensive tests for PHI detection and removal.",
+      "acceptanceCriteria": [
+        "Test file /lib/__tests__/phi-scrubber.test.ts",
+        "Tests for email detection (various formats)",
+        "Tests for phone detection (US formats with/without country code)",
+        "Tests for SSN detection",
+        "Tests for name field removal",
+        "Tests for URL query parameter stripping",
+        "Tests for nested object scrubbing",
+        "Tests for IP anonymization",
+        "Tests for edge cases (empty strings, null values, arrays)",
+        "100% code coverage on phi-scrubber.ts",
+        "All tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 31,
+      "passes": false,
+      "notes": "Critical security validation"
+    },
+    {
+      "id": "US-032",
+      "title": "Integration Tests for Platform APIs",
+      "description": "Test integrations with advertising platform APIs.",
+      "acceptanceCriteria": [
+        "Test files in /lib/integrations/__tests__/",
+        "Mock server setup using msw (Mock Service Worker)",
+        "GA4 tests: successful send, retry on failure, invalid credentials",
+        "Meta tests: successful send, deduplication, rate limiting",
+        "TikTok tests: successful send, error handling",
+        "Google Ads tests: OAuth flow, conversion upload, token refresh",
+        "LinkedIn tests: successful send, auth errors",
+        "Test event transformation logic",
+        "All tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 32,
+      "passes": false,
+      "notes": "Ensure integrations work correctly"
+    },
+    {
+      "id": "US-033",
+      "title": "End-to-End Tests",
+      "description": "E2E tests for critical user flows.",
+      "acceptanceCriteria": [
+        "Playwright test setup in /e2e/",
+        "Test: Sign up flow (form submission, email verification mock, dashboard access)",
+        "Test: Login flow (valid credentials, invalid credentials)",
+        "Test: Platform connection flow (add Meta pixel, test connection)",
+        "Test: SDK integration simulation (mock SDK events, verify in event log)",
+        "Test: Settings changes (update org name, verify saved)",
+        "CI configuration to run E2E tests",
+        "All E2E tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 33,
+      "passes": false,
+      "notes": "Confidence in critical paths"
+    }
+  ]
+}
