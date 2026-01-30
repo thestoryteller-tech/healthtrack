@@ -23,7 +23,7 @@ function hashApiKey(key: string): string {
  * Get the prefix of an API key (for display)
  */
 function getKeyPrefix(key: string): string {
-  return key.substring(0, 16);
+  return key.substring(0, 8);
 }
 
 export async function POST(request: Request) {
