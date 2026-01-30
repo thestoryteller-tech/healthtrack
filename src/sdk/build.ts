@@ -4,7 +4,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 async function build() {
-  const outfile = path.join(__dirname, 'dist', 'healthtrack.min.js');
+  const distDir = path.join(__dirname, 'dist');
+  const outfile = path.join(distDir, 'healthtrack.min.js');
 
   // Build minified version
   await esbuild.build({
@@ -42,7 +43,7 @@ async function build() {
     target: ['es2015'],
     format: 'iife',
     globalName: 'HealthTrackModule',
-    outfile: path.join(__dirname, 'dist', 'healthtrack.js'),
+    outfile: path.join(distDir, 'healthtrack.js'),
   });
 
   console.log('  ✓ Debug build created');
@@ -51,10 +52,15 @@ async function build() {
   await esbuild.build({
     entryPoints: [path.join(__dirname, 'src', 'index.ts')],
     bundle: false,
-    outfile: path.join(__dirname, 'dist', 'index.d.ts'),
+    outfile: path.join(distDir, 'index.d.ts'),
     format: 'esm',
     // This won't actually generate .d.ts, we'll create it manually
   });
+
+  const publicSdkDir = path.join(__dirname, '..', '..', 'public', 'sdk');
+  fs.mkdirSync(publicSdkDir, { recursive: true });
+  fs.cpSync(distDir, publicSdkDir, { recursive: true, force: true });
+  console.log('  ✓ Copied SDK dist to public/sdk');
 }
 
 build().catch((err) => {
